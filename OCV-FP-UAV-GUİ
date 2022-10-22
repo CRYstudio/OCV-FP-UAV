@@ -1,0 +1,424 @@
+#TORNADO GÖREV YAZILIMI
+# -*- coding: utf-8 -*-
+ 
+import cv2 as cv
+import numpy as np
+import math
+import os
+import time
+import serial
+from tkinter import *
+from threading import *
+
+
+
+pen = Tk()
+
+pen.geometry("900x650+0+0")
+pen.title("TORNADO GÖREV YAZILIMI")
+
+ust_frame1 = Frame(pen, bg = "lightblue")
+ust_frame1.place(relx = 0.795, rely = 0.01 ,relwidth = 0.20, relheight = 0.2)
+
+ust_frame = Frame(pen, bg = "lightblue")
+ust_frame.place(relx = 0.795, rely = 0.215 ,relwidth = 0.20, relheight = 0.62)
+
+alt_frame = Frame(pen, bg = "lightblue")
+alt_frame.place(relx = 0.795, rely = 0.286 ,relwidth = 0.20, relheight = 0.045)
+
+baglantı = None
+def seri_hab():
+    global baglantı
+    try:
+        # c_port = input("PORT GİR: ")
+        arduino = serial.Serial(port="/dev/ttyUSB0", baudrate=9600, timeout=.1) #Seri Haberleşmeyi başlat.
+        baglantı = True
+    except:
+        yazi_hata = Label(alt_frame, text = "HATA: ARDUİNO BAĞLI DEĞİL!", font ="calibri 8 bold", fg= "red")
+        yazi_hata.pack(padx = 0.05, pady = 3, side = TOP)
+        time.sleep(2)
+        Tk.destroy(yazi_hata)
+        baglantı = False
+    print(baglantı)
+        
+def tseri():
+    tser= Thread(target = seri_hab)
+    tser.start()
+    
+tseri()
+print(baglantı)
+if(baglantı == True):
+    yazi_hata = Label(ust_frame1, text = "BAĞLANTI KURULDU", font ="calibri 10 bold", fg= "green")
+    yazi_hata.pack(padx = 0.05, pady = 3, side = TOP)
+else:
+    yazi_hata = Label(ust_frame1, text = "BAĞLANTI YOK", font ="calibri 10 bold", fg= "red")
+    yazi_hata.pack(padx = 0.05, pady = 3, side = TOP)
+
+
+but_ard = Button(ust_frame1, text = "BAĞLAN", command = tseri, padx = 20, pady = 5)
+but_ard.pack(pady = 5)
+
+ust_frame = Frame(pen, bg = "lightblue")
+ust_frame.place(relx = 0.795, rely = 0.215 ,relwidth = 0.20, relheight = 0.62)
+
+alt_frame = Frame(pen, bg = "lightblue")
+alt_frame.place(relx = 0.795, rely = 0.886 ,relwidth = 0.20, relheight = 0.045)
+
+yazi = Label(ust_frame, text = "BUTONLAR:", font ="verdana 12 bold" )
+yazi.pack(padx = 0.1, pady = 0, side = TOP)
+
+def gonder(an):
+    try:
+        while 1:
+            arduino.write(bytes(an, 'utf-8'))
+            time.sleep(0.05)
+            print(an, "Gönderildi...")
+            yazi1 = Label(alt_frame, text = an+" Gönderildi...", font ="verdana 10 bold")
+            yazi1.pack(padx = 0.05, pady = 3, side = TOP)
+            break
+        time.sleep(1)
+        Tk.destroy(yazi1)
+    except NameError:
+        yazi_hata = Label(alt_frame, text = "HATA: ARDUİNO BAĞLI DEĞİL!", font ="calibri 8 bold", fg= "red")
+        yazi_hata.pack(padx = 0.05, pady = 3, side = TOP)
+        time.sleep(2)
+        Tk.destroy(yazi_hata)
+        
+fotoAd = None
+durum = None
+
+def fotoal(): #Fotoğrafı içe aktarma.
+    global data
+    global dataHsv
+    global fotoAd
+    fotoAd = "foto.jpg"
+    try :
+        data = cv.imread(fotoAd)
+        print(fotoAd + "İsimli fotoğraf bekleniyor...")
+        x, y, w, h = 0, 0, 0, 0
+        data = cv.medianBlur(data,5)
+        dataHsv=cv.cvtColor(data,cv.COLOR_BGR2HSV)
+    except:
+        time.sleep(1)
+        fotoal()
+    return fotoAd
+a = 0
+b = 0
+maviDeg = None
+sariDeg = None
+kirmiziDeg = None
+xDeg = None
+yesilDeg = None
+
+def mavi():
+    global a
+    global b
+    global maviDeg    
+    mlower_color = np.array([75,100,100])#Mavi renk eşik değerleri.
+    mupper_color = np.array([130,255,255])
+    mask = cv.inRange(dataHsv, mlower_color,mupper_color)
+    mask = cv.dilate(mask,(3,3),iterations=3)
+    contour, _ = cv.findContours(mask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    for cnt in contour:
+        area = cv.contourArea(cnt)     
+        if area > 480:#Kontur minimum değeri.
+            x, y, w, h = cv.boundingRect(cnt) #Diktörtgen kutu çizimi.
+            cv.rectangle(data, (x, y), (x + w, y + h), (0, 255, 0), 3)
+            cv.putText(	data, "Mavi Hedef", (x-35,y), cv.FONT_HERSHEY_SIMPLEX, 1,(0,0,0), 2, cv.LINE_AA  )
+            a = x+(w/2)  # Çerçeve genişliğinin yarısı
+            b = y+(h/2)  # Çerçeve yüksekliğinin yarısı
+            cv.circle(data,((int(a)),(int(b))), 1, (0,255,0), 6)
+            maviDeg = ([int(a),int(b)])
+            #print("mavi",a,b)
+def sarı():
+    global a
+    global b
+    global sariDeg
+    slower_color = np.array([22,100,100])#Sarı renk eşik değerleri.
+    supper_color = np.array([38,255,255])
+    mask = cv.inRange(dataHsv, slower_color,supper_color)
+    mask = cv.dilate(mask,(3,3),iterations=3)
+    contour, _ = cv.findContours(mask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    for cnt in contour:
+        area = cv.contourArea(cnt)     
+        if area > 480:#Kontur minimum değeri.
+            x, y, w, h = cv.boundingRect(cnt) #Diktörtgen kutu çizimi.
+            cv.rectangle(data, (x, y), (x + w, y + h), (0, 255, 0), 3)
+            cv.putText(	data, "Sari Hedef", (x-35,y), cv.FONT_HERSHEY_SIMPLEX, 1,(0,0,0), 2, cv.LINE_AA  )
+            a = x+(w/2)  # Çerçeve genişliğinin yarısı
+            b = y+(h/2)  # Çerçeve yüksekliğinin yarısı
+            cv.circle(data,((int(a)),(int(b))), 1, (0,255,0), 6)
+            sariDeg = ([int(a),int(b)])
+
+def yeşil():
+    global a
+    global b
+    global yesilDeg
+    ylower_color = np.array([38,100,100])#Yeşil renk eşik değerleri.
+    yupper_color = np.array([75,255,255])
+    mask = cv.inRange(dataHsv, ylower_color,yupper_color)
+    mask = cv.dilate(mask,(3,3),iterations=3)
+    contour, _ = cv.findContours(mask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    for cnt in contour:
+        area = cv.contourArea(cnt)     
+        if area > 480:#Kontur minimum değeri.
+            x, y, w, h = cv.boundingRect(cnt) #Diktörtgen kutu çizimi.
+            cv.rectangle(data, (x, y), (x + w, y + h), (0, 255, 0), 3)
+            cv.putText(	data, "Yesil Hedef", (x-35,y), cv.FONT_HERSHEY_SIMPLEX, 1,(0,0,0), 2, cv.LINE_AA  )
+            a = x+(w/2)  # Çerçeve genişliğinin yarısı
+            b = y+(h/2)  # Çerçeve yüksekliğinin yarısı
+            cv.circle(data,((int(a)),(int(b))), 1, (0,255,0), 6)
+            yesilDeg = ([int(a),int(b)])
+
+def kırmızı():
+    global kirmiziDeg
+    global xDeg
+    klower_color = np.array([160,100,100])#Kırrmızı renk eşik değerleri.
+    kupper_color = np.array([179,255,255])
+    mask = cv.inRange(dataHsv, klower_color,kupper_color)
+    mask = cv.dilate(mask,(3,3),iterations=3)
+    contour, _ = cv.findContours(mask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    for cnt in contour:
+        area = cv.contourArea(cnt)     
+        if area > 480:#Kontur minimum değeri.
+            x, y, w, h = cv.boundingRect(cnt) #Diktörtgen kutu çizimi.
+            cv.rectangle(data, (x, y), (x + w, y + h), (0, 255, 0), 3)
+            cv.putText(	data, "Kirmizi", (x,y), cv.FONT_HERSHEY_SIMPLEX, 1,(0,0,0), 2, cv.LINE_AA  )
+            a1 = x+(w/2)  # Çerçeve genişliğinin yarısı
+            b1 = y+(h/2)  # Çerçeve yüksekliğinin yarısı
+            cv.circle(data,((int(a1)),(int(b1))), 1, (0,255,0), 6)
+            kirmiziDeg = ([int(a1),int(b1)])
+            cv.line(data, (int(a1), int(b1)), (int(a), int(b)), (0, 0, 0), 5)            
+            cv.line(data, (int(a1), int(b1)), (int(a1+a1), int(b1)), (0, 0, 0), 5)
+            xDeg = ([a1+a1,b1])
+            
+angD = None
+def getAngle(pointList):
+    global angD
+    b, a, c = pointList[-3:]
+    ang = math.degrees(math.atan2(c[1]-b[1], c[0]-b[0]) - math.atan2(a[1]-b[1], a[0]-b[0]))
+    if ang < 0:
+        angD= round (ang + 360)
+    else: 
+         angD= round(ang )
+    cv.putText(data,str(angD),(b[0]-40,b[1]-20),cv.FONT_HERSHEY_COMPLEX,1.5,(0,0,0),2)
+
+def show_frames():
+    cv2image = cv.cvtColor(data, cv.COLOR_BGR2RGB)
+    img = Image.fromarray(cv2image)
+    imgtk = ImageTk.PhotoImage(image = img)
+    label.imgtk = imgtk
+    label.configure(image=imgtk)
+    
+gDeg = False
+
+def oto():
+    global gDeg
+    while 1:
+        fotoal()
+        sarı()
+        kırmızı()
+        if(gDeg == True):
+            gDeg = False
+            break
+        while not(sariDeg == None):
+            spointsList =(kirmiziDeg,sariDeg, xDeg )
+            getAngle(spointsList)
+            print("Sarı açı: ",angD,"°",sep="")
+            os.remove(fotoAd)
+            if(gDeg == False) and (sariDeg != None):
+                fotoal()
+                show_frames()
+                continue
+            else:
+                break
+        if(gDeg == True):
+            gDeg = False
+            break
+        fotoal()
+        mavi()
+        kırmızı()
+        while not(maviDeg == None):
+            mpointsList =(kirmiziDeg,maviDeg, xDeg )
+            getAngle(mpointsList)
+            print("Mavi açı: ",angD,"°",sep="")
+            os.remove(fotoAd)
+            if(gDeg == False) and (maviDeg != None):
+                fotoal()
+                show_frames()
+                continue
+            else:
+                break
+        if(gDeg == True):
+            gDeg = False
+            break
+        fotoal()
+        yeşil()
+        kırmızı()
+        while not(maviDeg == None):
+            ypointsList =(kirmiziDeg,yesilDeg, xDeg )
+            getAngle(ypointsList)
+            print("Yeşil açı: ",angD,"°",sep="")
+            os.remove(fotoAd)
+            if(gDeg == False) and (yesilDeg != None):
+                fotoal()
+                show_frames()
+                continue
+            else:
+                break
+        if(gDeg == True):
+            gDeg = False
+            break
+            
+
+                
+def call_sarı():
+    global gDeg
+    while 1:
+        fotoal()
+        if(gDeg == True):
+            gDeg = False
+            break
+        sarı()
+        kırmızı()
+        if(sariDeg == None):
+            print("Görselde SARI Renk Bulunamadı...")
+            os.remove(fotoAd)
+            gonder("*"+str(400)+"#")
+            time.sleep(0.1)
+            gonder("*"+str(400)+"#")
+            break
+        os.remove(fotoAd)
+        gonder("*"+str(400)+"#")
+        while not(sariDeg == None):
+            spointsList =(kirmiziDeg,sariDeg, xDeg )
+            getAngle(spointsList)
+            #cv.imshow('Resim', data)
+            show_frames()
+            print("Açı :",angD,"°",sep="")
+            cv.waitKey(1500)
+            cv.destroyAllWindows()
+            print("Fotoğraf bekleniyor...")
+            durum = "normal"
+            break
+        gonder("*"+str(angD)+"#")
+        time.sleep(0.1)
+        gonder("*"+str(angD)+"#")
+        print(gDeg)
+
+def call_mavi():
+    global gDeg
+    while 1:
+        fotoal()
+        if(gDeg == True):
+            gDeg = False
+            break
+        mavi()
+        kırmızı()
+        if(maviDeg == None):
+            print("Görselde MAVİ Renk Bulunamadı...")
+            os.remove(fotoAd)
+            gonder("*"+str(400)+"#")
+            time.sleep(0.1)
+            gonder("*"+str(400)+"#")
+            break
+        os.remove(fotoAd)
+        gonder("*"+str(400)+"#")
+        while not(maviDeg == None):
+            mpointsList =(kirmiziDeg,maviDeg, xDeg )
+            getAngle(mpointsList)
+            #cv.imshow('Resim', data)
+            show_frames()
+            print("Açı :",angD,"°",sep="")
+            cv.waitKey(5000)
+            cv.destroyAllWindows()
+            durum = "normal"
+            print("Fotoğraf bekleniyor...")
+            break
+        gonder("*"+str(angD)+"#")
+        time.sleep(0.1)
+        gonder("*"+str(angD)+"#")
+        print(gDeg)
+
+
+def call_yeşil():
+    global gDeg
+    while 1:
+        fotoal()
+        if(gDeg == True):
+            gDeg = False
+            break
+        yeşil()
+        kırmızı()
+        if(yesilDeg == None):
+            print("Görselde YEŞİL Renk Bulunamadı...")
+            os.remove(fotoAd)
+            gonder("*"+str(400)+"#")
+            time.sleep(0.1)
+            gonder("*"+str(400)+"#")
+            break
+        os.remove(fotoAd)
+        gonder("*"+str(400)+"#")
+        while not(yesilDeg == None):
+            ypointsList =(kirmiziDeg,yesilDeg, xDeg )
+            getAngle(ypointsList)
+            #cv.imshow('Resim', data)
+            show_frames()
+            print("Açı :",angD,"°",sep="")
+            cv.waitKey(1500)
+            cv.destroyAllWindows()
+            durum = "normal"
+            print("Fotoğraf bekleniyor...")
+            break
+        gonder("*"+str(angD)+"#")
+        time.sleep(0.1)
+        gonder("*"+str(angD)+"#")
+        print(gDeg)
+
+def degdegis():
+    global gDeg
+    gDeg = True
+    gonder("*"+str(450)+"#")
+    
+def thre_s():
+    t1 = Thread(target = call_sarı)
+    t1.start()
+
+def thre_m():
+    t2 = Thread(target = call_mavi)
+    t2.start()
+
+def thre_y():
+    t3 = Thread(target = call_yeşil)
+    t3.start()
+    
+def basla():
+    gonder("*"+str(500)+"#")
+    
+def thre_son():
+    td = Thread(target = degdegis)
+    td.start()
+    
+def thre_baslat():
+    tb = Thread(target = basla)
+    tb.start()
+
+def thre_oto():
+    to = Thread(target = oto)
+    to.start()
+
+def buton():
+    but3 = Button(ust_frame, text = "GÖREVİ BAŞLAT", command = thre_baslat, padx = 30, pady = 10)
+    but3.pack(pady = 10)
+    but3 = Button(ust_frame, text = "GÖREVİ SONLANDIR", command = thre_son, padx = 19, pady = 10)
+    but3.pack(pady = 10)
+    but1 = Button(ust_frame, text = "SARI HEDEF", command = thre_s, padx = 40, pady = 10)
+    but1.pack(pady = 10)
+    but2 = Button(ust_frame, text = "MAVİ HEDEF", command = thre_m, padx = 40, pady = 10)
+    but2.pack(pady = 10)
+    but3 = Button(ust_frame, text = "YEŞİL HEDEF", command = thre_y, padx = 40, pady = 10)
+    but3.pack(pady = 10)
+    but3 = Button(ust_frame, text = "AUTO", command = thre_oto, padx = 58, pady = 10)
+    but3.pack(pady = 10)
+    pen.mainloop()
+buton()
